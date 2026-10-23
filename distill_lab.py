@@ -33,6 +33,8 @@ from transformers import (
 
 NUM_LABELS = 6
 RESULTS_CSV = "distill_results.csv"
+# dair-ai/emotion label order
+EMOTION_LABELS = ["sadness", "joy", "love", "anger", "fear", "surprise"]
 
 
 # args
@@ -245,6 +247,18 @@ def main():
     best = AutoModelForSequenceClassification.from_pretrained(out_dir).to(device)
     test_acc, test_f1 = evaluate(best, test_dl, device)
     print(f"\nTEST acc {test_acc:.4f} | TEST macro-F1 {test_f1:.4f}")
+
+    # per-class report
+    from sklearn.metrics import classification_report
+    best.eval()
+    all_preds, all_gold = [], []
+    with torch.no_grad():
+        for batch in test_dl:
+            ids, mask, labels = unpack(batch, device)
+            logits = best(input_ids=ids, attention_mask=mask).logits
+            all_preds += logits.argmax(-1).cpu().tolist()
+            all_gold += labels.cpu().tolist()
+    print(classification_report(all_gold, all_preds, target_names=EMOTION_LABELS, digits=4))
 
     row = {
         "run": run_name, "mode": args.mode, "model": model_name,
