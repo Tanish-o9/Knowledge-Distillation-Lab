@@ -119,6 +119,11 @@ if device and comp[["lat_ms_mean"]].notna().any().any():
 else:
     st.info("No benchmark data yet. Run `benchmark.py` to add latency and throughput.")
 
+# Model size comparison
+if "params_M" in comp.columns and comp["params_M"].notna().any():
+    st.subheader("Model size comparison (parameters, M)")
+    st.bar_chart(comp["params_M"])
+
 # ------------------------------------------------------------ ablation
 st.header("2. Temperature and alpha ablation (validation accuracy)")
 if distill_all.empty:
