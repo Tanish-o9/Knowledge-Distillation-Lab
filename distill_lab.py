@@ -58,6 +58,8 @@ def parse_args():
                    help="use only N train examples (0 = all)")
     p.add_argument("--patience", type=int, default=0,
                    help="early stopping patience (0 = disabled)")
+    p.add_argument("--warmup_ratio", type=float, default=0.06,
+                   help="fraction of total steps used for LR warm-up (default 0.06)")
     p.add_argument("--run_name", default="")
     return p.parse_args()
 
@@ -142,7 +144,7 @@ def train(model, train_dl, val_dl, args, device, out_dir, tokenizer, teacher=Non
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     total_steps = len(train_dl) * args.epochs
     scheduler = get_linear_schedule_with_warmup(
-        optimizer, int(0.06 * total_steps), total_steps)
+        optimizer, int(args.warmup_ratio * total_steps), total_steps)
 
     use_amp = device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
