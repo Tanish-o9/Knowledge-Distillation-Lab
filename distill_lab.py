@@ -54,6 +54,8 @@ def parse_args():
                    help="weight of label loss; (1-alpha) goes to teacher loss")
     p.add_argument("--train_limit", type=int, default=0,
                    help="use only N train examples (0 = all)")
+    p.add_argument("--patience", type=int, default=0,
+                   help="early stopping patience (0 = disabled)")
     p.add_argument("--run_name", default="")
     return p.parse_args()
 
@@ -144,6 +146,7 @@ def train(model, train_dl, val_dl, args, device, out_dir, tokenizer, teacher=Non
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
     best_val, start = 0.0, time.time()
+    no_improve = 0  # early stopping counter
     for epoch in range(args.epochs):
         model.train()
         run_loss, n = 0.0, 0
@@ -178,8 +181,14 @@ def train(model, train_dl, val_dl, args, device, out_dir, tokenizer, teacher=Non
 
         if val_acc > best_val:  # keep best epoch by VALIDATION accuracy
             best_val = val_acc
+            no_improve = 0
             model.save_pretrained(out_dir)
             tokenizer.save_pretrained(out_dir)
+        else:
+            no_improve += 1
+            if args.patience and no_improve >= args.patience:
+                print(f"Early stopping triggered (patience={args.patience}).")
+                break
 
     return best_val, time.time() - start
 
