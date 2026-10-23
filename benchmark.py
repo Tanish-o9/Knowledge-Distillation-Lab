@@ -115,10 +115,12 @@ def main():
             thr = measure_throughput(
                 model, tok, texts, device, args.batch_size, args.reps, args.max_len)
 
-            print(f"    latency {lat_mean:.2f} ms (p95 {lat_p95:.2f}) | "
+            print(f"    params: {sum(p.numel() for p in model.parameters())/1e6:.1f}M | "
+                  f"latency {lat_mean:.2f} ms (p95 {lat_p95:.2f}) | "
                   f"throughput {thr:.0f} samples/s")
             rows.append({
                 "run": run, "device": dev_name,
+                "params_M": round(sum(p.numel() for p in model.parameters()) / 1e6, 2),
                 "lat_ms_mean": round(lat_mean, 3), "lat_ms_p95": round(lat_p95, 3),
                 "throughput_sps": round(thr, 1), "batch_size": args.batch_size,
                 "threads": args.threads if dev_name == "cpu" else "",
