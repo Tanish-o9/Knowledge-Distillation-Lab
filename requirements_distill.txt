@@ -1,7 +1,8 @@
-torch
-transformers
-datasets
-scikit-learn
-numpy
-pandas
-streamlit
+torch>=2.1.0
+transformers>=4.38.0
+datasets>=2.18.0
+scikit-learn>=1.4.0
+numpy>=1.26.0
+pandas>=2.2.0
+streamlit>=1.32.0
+accelerate>=0.28.0
