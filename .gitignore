@@ -26,9 +26,6 @@ runs/
 *.pth
 *.ckpt
 
-# Generated CSVs (result outputs)
-distill_results.csv
-benchmark_results.csv
 
 # OS
 .DS_Store

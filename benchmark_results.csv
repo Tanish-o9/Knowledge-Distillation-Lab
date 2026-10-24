@@ -1,0 +1,7 @@
+run,device,params_M,lat_ms_mean,lat_ms_p95,throughput_sps,batch_size,threads
+teacher,cuda,109.49,45.159,57.758,177.7,32,
+plain_distilbert-base-uncased_full_s42,cuda,66.96,23.187,26.191,348.1,32,
+distill_distilbert-base-uncased_full_T4_a0.5_s42,cuda,66.96,22.273,30.185,333.8,32,
+teacher,cpu,109.49,202.308,339.141,4.9,32,4
+plain_distilbert-base-uncased_full_s42,cpu,66.96,134.33,209.451,8.9,32,4
+distill_distilbert-base-uncased_full_T4_a0.5_s42,cpu,66.96,118.106,169.385,19.2,32,4

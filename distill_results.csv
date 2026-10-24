@@ -1,0 +1,4 @@
+run,mode,model,params_M,size_mb,train_limit,temperature,alpha,seed,epochs,best_val_acc,test_acc,test_f1,train_time_s
+teacher,teacher,bert-base-uncased,109.49,418.4,full,,,42,3,0.94,0.9265,0.8743,419.2
+plain_distilbert-base-uncased_full_s42,student_plain,distilbert-base-uncased,66.96,256.1,full,,,42,3,0.9405,0.9265,0.8838,53221.5
+distill_distilbert-base-uncased_full_T4_a0.5_s42,student_distill,distilbert-base-uncased,66.96,256.1,full,4.0,0.5,42,3,0.9465,0.9265,0.8836,471.5
