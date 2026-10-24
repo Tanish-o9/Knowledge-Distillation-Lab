@@ -530,13 +530,16 @@ with tab_demo:
 
                     @st.cache_resource
                     def load_models_for_demo():
-                        t_tok = AutoTokenizer.from_pretrained("runs/teacher")
-                        t_mod = AutoModelForSequenceClassification.from_pretrained("runs/teacher").eval()
-                        
+                        # Use local checkpoints if available; fallback to Hugging Face Hub on Cloud deployment
+                        t_path = "runs/teacher" if os.path.exists("runs/teacher") else "bhadresh-psav/bert-base-uncased-emotion"
                         dist_path = d_data["run"] if d_data is not None else "distill_distilbert-base-uncased_full_T4_a0.5_s42"
                         dist_dir = os.path.join("runs", dist_path)
-                        d_tok = AutoTokenizer.from_pretrained(dist_dir)
-                        d_mod = AutoModelForSequenceClassification.from_pretrained(dist_dir).eval()
+                        d_path = dist_dir if os.path.exists(dist_dir) else "bhadresh-psav/distilbert-base-uncased-emotion"
+
+                        t_tok = AutoTokenizer.from_pretrained(t_path)
+                        t_mod = AutoModelForSequenceClassification.from_pretrained(t_path).eval()
+                        d_tok = AutoTokenizer.from_pretrained(d_path)
+                        d_mod = AutoModelForSequenceClassification.from_pretrained(d_path).eval()
                         return (t_tok, t_mod), (d_tok, d_mod)
 
                     (t_tok, t_mod), (d_tok, d_mod) = load_models_for_demo()
