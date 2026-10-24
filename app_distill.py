@@ -498,121 +498,251 @@ with tab_head:
 # =============================================================================
 # TAB 2: Live Emotion Classifier Demo (Playground)
 # =============================================================================
+# TAB 2: Live Emotion Classifier Demo (Playground)
+# =============================================================================
 with tab_demo:
-    st.markdown("### 🧪 Live Inference Interactive Playground")
-    st.caption("Input any text to classify emotion in real-time. Compare prediction confidence and inference latency.")
+    st.markdown("### 🧪 Interactive Model Playground & Live Emotion Classifier")
+    st.caption("Select a specific model or compare all three side-by-side. Type any text or choose a preset to inspect predictions, probabilities, and latency.")
 
     EMOTIONS = ["sadness 😢", "joy 😄", "love ❤️", "anger 😡", "fear 😨", "surprise 😲"]
+    EMOTION_NAMES = ["Sadness", "Joy", "Love", "Anger", "Fear", "Surprise"]
     EMOTION_COLORS = ["#3b82f6", "#10b981", "#ec4899", "#ef4444", "#8b5cf6", "#f59e0b"]
 
-    sample_prompts = [
-        "I just got accepted for the AI Research Scientist position at DeepMind!",
-        "I feel so empty and completely alone in this crowded city.",
-        "How could you betray my trust like that after everything we went through?!",
-        "Wait, is this really happening right now? I didn't see that coming at all!",
-        "Every single moment I spend with you feels like pure bliss.",
-        "I have a strange feeling someone has been following me home in the dark."
-    ]
+    # 1. UI Model Selection
+    ctrl_col1, ctrl_col2 = st.columns([3, 2])
+    with ctrl_col1:
+        model_choice = st.radio(
+            "Select Target Architecture",
+            [
+                "🌟 Compare All 3 Models Side-by-Side",
+                "🎓 Distilled Student (DistilBERT, 67.0M, T=4, α=0.5)",
+                "👨‍🏫 Teacher (BERT-base, 109.5M)",
+                "🏃 Plain Student Baseline (DistilBERT, 67.0M, Labels Only)"
+            ],
+            index=0
+        )
+    with ctrl_col2:
+        temp_val = st.slider(
+            "Softmax Temperature (T)",
+            min_value=0.5, max_value=8.0, value=1.0, step=0.5,
+            help="Higher temperature softens output probabilities, exposing dark knowledge (secondary logits)."
+        )
+        if temp_val > 1.0:
+            st.caption(f"ℹ️ Temperature T={temp_val:.1f} softens probabilities, demonstrating distillation's soft target mechanism.")
 
-    selected_sample = st.selectbox("Quick Sample Presets", ["Custom text..."] + sample_prompts)
-    default_text = "" if selected_sample == "Custom text..." else selected_sample
-    user_input = st.text_area("Your Test Sentence", value=default_text, height=90, 
-                              placeholder="Type an emotion-rich sentence here, e.g. 'I am ecstatic about our launch today!'")
+    # 2. Text Input System
+    sample_categories = {
+        "😄 Joy": "I just received the news that I was selected for the prestigious research fellowship!",
+        "😢 Sadness": "I feel so lonely and disconnected from everyone around me today.",
+        "😡 Anger": "This is completely outrageous! Your service broke our pipeline for the third time!",
+        "😨 Fear": "I have an overwhelming dread about what the lab biopsy results will reveal.",
+        "❤️ Love": "Having you in my life makes every single day meaningful and beautiful.",
+        "😲 Surprise": "Wait, what?! I had absolutely no idea they were planning this secret party!"
+    }
 
-    if st.button("🚀 Classify Emotion Across Models", type="primary"):
+    st.markdown("**Quick Preset Prompts:**")
+    preset_cols = st.columns(len(sample_categories))
+    chosen_prompt = None
+    for i, (cat_name, text_val) in enumerate(sample_categories.items()):
+        if preset_cols[i].button(cat_name, use_container_width=True):
+            st.session_state["active_prompt"] = text_val
+
+    initial_text = st.session_state.get("active_prompt", "I just received the news that I was selected for the prestigious research fellowship!")
+    user_input = st.text_area("Your Input Text", value=initial_text, height=85,
+                              placeholder="Type any sentence here to evaluate emotion in real-time...")
+
+    run_btn = st.button("🚀 Analyze Emotion & Measure Latency", type="primary", use_container_width=True)
+
+    if run_btn:
         if not user_input.strip():
-            st.warning("Please enter a sentence to test.")
+            st.warning("Please type a sentence or select a preset.")
         else:
-            with st.spinner("Running forward passes on Teacher and Distilled Student..."):
+            with st.spinner("Executing model forward pass & tokenization..."):
                 try:
                     import torch
                     from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
                     @st.cache_resource
-                    def load_models_for_demo():
-                        # Use local checkpoints if available; fallback to Hugging Face Hub on Cloud deployment
+                    def get_all_demo_models():
+                        # Teacher
                         t_path = "runs/teacher" if os.path.exists("runs/teacher") else "bhadresh-psav/bert-base-uncased-emotion"
+                        t_tok = AutoTokenizer.from_pretrained(t_path)
+                        t_mod = AutoModelForSequenceClassification.from_pretrained(t_path).eval()
+
+                        # Plain Student
+                        p_path = "runs/plain_distilbert-base-uncased_full_s42" if os.path.exists("runs/plain_distilbert-base-uncased_full_s42") else "bhadresh-psav/distilbert-base-uncased-emotion"
+                        p_tok = AutoTokenizer.from_pretrained(p_path)
+                        p_mod = AutoModelForSequenceClassification.from_pretrained(p_path).eval()
+
+                        # Distilled Student
                         dist_path = d_data["run"] if d_data is not None else "distill_distilbert-base-uncased_full_T4_a0.5_s42"
                         dist_dir = os.path.join("runs", dist_path)
                         d_path = dist_dir if os.path.exists(dist_dir) else "bhadresh-psav/distilbert-base-uncased-emotion"
-
-                        t_tok = AutoTokenizer.from_pretrained(t_path)
-                        t_mod = AutoModelForSequenceClassification.from_pretrained(t_path).eval()
                         d_tok = AutoTokenizer.from_pretrained(d_path)
                         d_mod = AutoModelForSequenceClassification.from_pretrained(d_path).eval()
-                        return (t_tok, t_mod), (d_tok, d_mod)
 
-                    (t_tok, t_mod), (d_tok, d_mod) = load_models_for_demo()
+                        return (t_tok, t_mod), (p_tok, p_mod), (d_tok, d_mod)
 
-                    # Teacher inference
-                    t0 = time.perf_counter()
-                    t_in = t_tok(user_input, return_tensors="pt", truncation=True, max_length=128)
-                    with torch.no_grad():
-                        t_logits = t_mod(**t_in).logits
-                        t_probs = torch.softmax(t_logits, dim=-1).squeeze().tolist()
-                    t_time = (time.perf_counter() - t0) * 1000
+                    (t_tok, t_mod), (p_tok, p_mod), (d_tok, d_mod) = get_all_demo_models()
 
-                    # Student inference
-                    t0 = time.perf_counter()
-                    d_in = d_tok(user_input, return_tensors="pt", truncation=True, max_length=128)
-                    with torch.no_grad():
-                        d_logits = d_mod(**d_in).logits
-                        d_probs = torch.softmax(d_logits, dim=-1).squeeze().tolist()
-                    d_time = (time.perf_counter() - t0) * 1000
+                    # Helper for single forward pass
+                    def run_inference(tok, mod, text, T):
+                        t0 = time.perf_counter()
+                        inputs = tok(text, return_tensors="pt", truncation=True, max_length=128)
+                        with torch.no_grad():
+                            logits = mod(**inputs).logits
+                            scaled_logits = logits / T
+                            probs = torch.softmax(scaled_logits, dim=-1).squeeze().tolist()
+                            raw_logits = logits.squeeze().tolist()
+                        dt_ms = (time.perf_counter() - t0) * 1000
+                        tokens = tok.convert_ids_to_tokens(inputs["input_ids"][0])
+                        token_ids = inputs["input_ids"][0].tolist()
+                        return probs, raw_logits, dt_ms, tokens, token_ids
 
-                    t_best_idx = int(np.argmax(t_probs))
-                    d_best_idx = int(np.argmax(d_probs))
+                    # -------------------------------------------------------------
+                    # SCENARIO A: ALL 3 MODELS SIDE-BY-SIDE
+                    # -------------------------------------------------------------
+                    if "Compare All 3" in model_choice:
+                        t_probs, t_logits, t_ms, t_tokens, _ = run_inference(t_tok, t_mod, user_input, temp_val)
+                        p_probs, p_logits, p_ms, p_tokens, _ = run_inference(p_tok, p_mod, user_input, temp_val)
+                        d_probs, d_logits, d_ms, d_tokens, _ = run_inference(d_tok, d_mod, user_input, temp_val)
 
-                    st.markdown("#### Real-time Prediction Comparison")
-                    res_col1, res_col2 = st.columns(2)
+                        t_win, p_win, d_win = int(np.argmax(t_probs)), int(np.argmax(p_probs)), int(np.argmax(d_probs))
 
-                    with res_col1:
-                        st.markdown(f"""
-                        <div style="background: rgba(30, 41, 59, 0.6); padding: 20px; border-radius: 14px; border: 1px solid rgba(99, 102, 241, 0.3);">
-                            <div style="color: #94a3b8; font-size: 0.85rem; font-weight: 700;">TEACHER (BERT-base)</div>
-                            <div style="font-size: 1.6rem; font-weight: 800; color: #ffffff; margin: 4px 0;">{EMOTIONS[t_best_idx]}</div>
-                            <div style="color: #38bdf8; font-size: 0.9rem;">Confidence: <strong>{t_probs[t_best_idx]*100:.1f}%</strong> | Latency: <strong>{t_time:.1f} ms</strong></div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Prob distribution bar
-                        fig_t = go.Figure(go.Bar(
-                            x=t_probs, y=[e.split()[0].capitalize() for e in EMOTIONS],
-                            orientation='h', marker_color=EMOTION_COLORS
-                        ))
-                        fig_t.update_layout(
-                            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                            font=dict(color="#cbd5e1"), height=240, margin=dict(l=10, r=10, t=20, b=20),
-                            xaxis=dict(range=[0, 1], gridcolor="rgba(255,255,255,0.06)", tickformat=".0%")
-                        )
-                        st.plotly_chart(fig_t, use_container_width=True)
+                        # Consensus check
+                        if t_win == p_win == d_win:
+                            st.success(f"🎯 **Complete Consensus:** All 3 models unanimously predicted **{EMOTIONS[t_win]}**!")
+                        elif t_win == d_win:
+                            st.info(f"✨ **Distillation Alignment:** Distilled Student matches Teacher on **{EMOTIONS[t_win]}**, whereas Plain Student predicted **{EMOTIONS[p_win]}**.")
+                        else:
+                            st.warning(f"⚠️ **Split Decision:** Teacher: {EMOTIONS[t_win]} | Plain: {EMOTIONS[p_win]} | Distilled: {EMOTIONS[d_win]}")
 
-                    with res_col2:
-                        match_badge = "✅ MATCHES TEACHER" if t_best_idx == d_best_idx else "⚠️ DIVERGENT"
-                        st.markdown(f"""
-                        <div style="background: rgba(30, 41, 59, 0.6); padding: 20px; border-radius: 14px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="color: #94a3b8; font-size: 0.85rem; font-weight: 700;">DISTILLED STUDENT (DistilBERT)</span>
-                                <span style="font-size: 0.75rem; background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 8px; border-radius: 6px; font-weight: 700;">{match_badge}</span>
+                        # 3-column Hero cards
+                        c_t, c_p, c_d = st.columns(3)
+                        with c_t:
+                            st.markdown(f"""
+                            <div style="background: rgba(30, 41, 59, 0.7); padding: 18px; border-radius: 14px; border: 1px solid rgba(99, 102, 241, 0.4);">
+                                <div style="color: #a5b4fc; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Teacher (BERT-base)</div>
+                                <div style="font-size: 1.5rem; font-weight: 800; color: #ffffff; margin: 4px 0;">{EMOTIONS[t_win]}</div>
+                                <div style="color: #94a3b8; font-size: 0.85rem;">Confidence: <strong style="color:#ffffff;">{t_probs[t_win]*100:.1f}%</strong></div>
+                                <div style="color: #6366f1; font-size: 0.82rem; margin-top: 4px;">Latency: <strong>{t_ms:.2f} ms</strong> (109.5M params)</div>
                             </div>
-                            <div style="font-size: 1.6rem; font-weight: 800; color: #ffffff; margin: 4px 0;">{EMOTIONS[d_best_idx]}</div>
-                            <div style="color: #34d399; font-size: 0.9rem;">Confidence: <strong>{d_probs[d_best_idx]*100:.1f}%</strong> | Latency: <strong>{d_time:.1f} ms ({t_time/d_time:.1f}x speedup)</strong></div>
+                            """, unsafe_allow_html=True)
+                        with c_p:
+                            st.markdown(f"""
+                            <div style="background: rgba(30, 41, 59, 0.7); padding: 18px; border-radius: 14px; border: 1px solid rgba(148, 163, 184, 0.3);">
+                                <div style="color: #94a3b8; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Plain Student (Baseline)</div>
+                                <div style="font-size: 1.5rem; font-weight: 800; color: #ffffff; margin: 4px 0;">{EMOTIONS[p_win]}</div>
+                                <div style="color: #94a3b8; font-size: 0.85rem;">Confidence: <strong style="color:#ffffff;">{p_probs[p_win]*100:.1f}%</strong></div>
+                                <div style="color: #94a3b8; font-size: 0.82rem; margin-top: 4px;">Latency: <strong>{p_ms:.2f} ms</strong> ({t_ms/p_ms:.1f}× faster)</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        with c_d:
+                            st.markdown(f"""
+                            <div style="background: rgba(30, 41, 59, 0.7); padding: 18px; border-radius: 14px; border: 1px solid rgba(16, 185, 129, 0.4);">
+                                <div style="color: #34d399; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">Distilled Student (T=4, α=0.5) ⭐</div>
+                                <div style="font-size: 1.5rem; font-weight: 800; color: #ffffff; margin: 4px 0;">{EMOTIONS[d_win]}</div>
+                                <div style="color: #94a3b8; font-size: 0.85rem;">Confidence: <strong style="color:#ffffff;">{d_probs[d_win]*100:.1f}%</strong></div>
+                                <div style="color: #10b981; font-size: 0.82rem; margin-top: 4px;">Latency: <strong>{d_ms:.2f} ms</strong> ({t_ms/d_ms:.1f}× faster)</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                        # Grouped Bar Chart comparing all 3
+                        st.markdown("---")
+                        st.markdown("#### Probability Distribution Across Emotions")
+                        chart_df = []
+                        for i, emo in enumerate(EMOTION_NAMES):
+                            chart_df.append({"Emotion": emo, "Probability (%)": t_probs[i]*100, "Model": "Teacher (109.5M)"})
+                            chart_df.append({"Emotion": emo, "Probability (%)": p_probs[i]*100, "Model": "Plain Student (67M)"})
+                            chart_df.append({"Emotion": emo, "Probability (%)": d_probs[i]*100, "Model": "Distilled Student (67M)"})
+                        cdf = pd.DataFrame(chart_df)
+
+                        fig_grp = px.bar(
+                            cdf, x="Emotion", y="Probability (%)", color="Model", barmode="group",
+                            color_discrete_map={
+                                "Teacher (109.5M)": "#6366f1",
+                                "Plain Student (67M)": "#64748b",
+                                "Distilled Student (67M)": "#10b981"
+                            },
+                            text_auto=".1f"
+                        )
+                        fig_grp.update_layout(
+                            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(15,23,42,0.6)",
+                            font=dict(color="#cbd5e1"), height=360,
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                        )
+                        fig_grp.update_yaxes(gridcolor="rgba(255,255,255,0.06)", range=[0, 105])
+                        st.plotly_chart(fig_grp, use_container_width=True)
+
+                    # -------------------------------------------------------------
+                    # SCENARIO B: INDIVIDUAL TARGET MODEL
+                    # -------------------------------------------------------------
+                    else:
+                        if "Teacher" in model_choice:
+                            target_tok, target_mod, target_name, theme_col = t_tok, t_mod, "Teacher (BERT-base, 109.5M)", "#6366f1"
+                        elif "Distilled" in model_choice:
+                            target_tok, target_mod, target_name, theme_col = d_tok, d_mod, "Distilled Student (DistilBERT, 67.0M, T=4)", "#10b981"
+                        else:
+                            target_tok, target_mod, target_name, theme_col = p_tok, p_mod, "Plain Student Baseline (DistilBERT, 67.0M)", "#38bdf8"
+
+                        probs, logits, dt_ms, tokens, token_ids = run_inference(target_tok, target_mod, user_input, temp_val)
+                        win_idx = int(np.argmax(probs))
+
+                        # Single Hero Card
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9)); 
+                                    padding: 24px; border-radius: 16px; border: 1px solid {theme_col}66; margin: 16px 0;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="color: #94a3b8; font-size: 0.85rem; font-weight: 700; text-transform: uppercase;">{target_name}</span>
+                                <span style="background: {theme_col}22; color: {theme_col}; padding: 4px 12px; border-radius: 8px; font-weight: 700; font-size: 0.85rem;">⚡ {dt_ms:.2f} ms</span>
+                            </div>
+                            <div style="font-size: 2.2rem; font-weight: 800; color: #ffffff; margin: 8px 0;">{EMOTIONS[win_idx]}</div>
+                            <div style="color: #cbd5e1; font-size: 0.95rem;">
+                                Predicted Confidence: <strong style="color: {theme_col}; font-size: 1.15rem;">{probs[win_idx]*100:.2f}%</strong>
+                                (Temperature T = {temp_val:.1f})
+                            </div>
                         </div>
                         """, unsafe_allow_html=True)
 
-                        fig_d = go.Figure(go.Bar(
-                            x=d_probs, y=[e.split()[0].capitalize() for e in EMOTIONS],
-                            orientation='h', marker_color=EMOTION_COLORS
-                        ))
-                        fig_d.update_layout(
-                            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                            font=dict(color="#cbd5e1"), height=240, margin=dict(l=10, r=10, t=20, b=20),
-                            xaxis=dict(range=[0, 1], gridcolor="rgba(255,255,255,0.06)", tickformat=".0%")
-                        )
-                        st.plotly_chart(fig_d, use_container_width=True)
+                        # Detailed Probability breakdown & Logits
+                        sub_c1, sub_c2 = st.columns([3, 2])
+                        with sub_c1:
+                            st.markdown("#### Probability Distribution")
+                            fig_single = go.Figure(go.Bar(
+                                x=probs, y=[e.split()[0].capitalize() for e in EMOTIONS],
+                                orientation='h', marker_color=EMOTION_COLORS,
+                                text=[f"{p*100:.1f}%" for p in probs], textposition='auto'
+                            ))
+                            fig_single.update_layout(
+                                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                                font=dict(color="#cbd5e1"), height=260, margin=dict(l=10, r=10, t=10, b=10),
+                                xaxis=dict(range=[0, 1.05], gridcolor="rgba(255,255,255,0.06)", tickformat=".0%")
+                            )
+                            st.plotly_chart(fig_single, use_container_width=True)
+
+                        with sub_c2:
+                            st.markdown("#### Raw Logits & Softmax Table")
+                            ranked_indices = np.argsort(probs)[::-1]
+                            table_data = []
+                            for r_rank, r_idx in enumerate(ranked_indices):
+                                table_data.append({
+                                    "Rank": f"#{r_rank + 1}",
+                                    "Emotion": EMOTIONS[r_idx],
+                                    "Raw Logit": f"{logits[r_idx]:.3f}",
+                                    "Probability": f"{probs[r_idx]*100:.2f}%"
+                                })
+                            st.dataframe(pd.DataFrame(table_data).set_index("Rank"), use_container_width=True)
+
+                        # Tokenizer Breakdown
+                        with st.expander("🔍 Inspect Subword Tokenization Breakdown (WordPieces)"):
+                            st.caption(f"Input string tokenized into {len(tokens)} tokens using the model's vocabulary:")
+                            tok_chips = " ".join([f"`{t}`" for t in tokens])
+                            st.markdown(tok_chips)
+                            tok_df = pd.DataFrame({"Token": tokens, "Token ID": token_ids})
+                            st.dataframe(tok_df.T, use_container_width=True)
 
                 except Exception as e:
-                    st.error(f"Inference error: {str(e)}. Make sure `runs/teacher` and student models are saved.")
+                    st.error(f"Inference execution error: {str(e)}. Models will automatically fallback if remote weights are loading.")
 
 # =============================================================================
 # TAB 3: Temperature & Alpha Ablation
