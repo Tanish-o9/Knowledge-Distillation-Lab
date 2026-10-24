@@ -564,20 +564,20 @@ with tab_demo:
 
                     @st.cache_resource
                     def get_all_demo_models():
-                        # Teacher
-                        t_path = "runs/teacher" if os.path.exists("runs/teacher") else "bhadresh-psav/bert-base-uncased-emotion"
+                        # Teacher: use local checkpoint if available, fallback to HF Hub on cloud
+                        t_path = "runs/teacher" if os.path.exists("runs/teacher") else "bhadresh-savani/bert-base-uncased-emotion"
                         t_tok = AutoTokenizer.from_pretrained(t_path)
                         t_mod = AutoModelForSequenceClassification.from_pretrained(t_path).eval()
 
                         # Plain Student
-                        p_path = "runs/plain_distilbert-base-uncased_full_s42" if os.path.exists("runs/plain_distilbert-base-uncased_full_s42") else "bhadresh-psav/distilbert-base-uncased-emotion"
+                        p_path = "runs/plain_distilbert-base-uncased_full_s42" if os.path.exists("runs/plain_distilbert-base-uncased_full_s42") else "bhadresh-savani/distilbert-base-uncased-emotion"
                         p_tok = AutoTokenizer.from_pretrained(p_path)
                         p_mod = AutoModelForSequenceClassification.from_pretrained(p_path).eval()
 
                         # Distilled Student
                         dist_path = d_data["run"] if d_data is not None else "distill_distilbert-base-uncased_full_T4_a0.5_s42"
                         dist_dir = os.path.join("runs", dist_path)
-                        d_path = dist_dir if os.path.exists(dist_dir) else "bhadresh-psav/distilbert-base-uncased-emotion"
+                        d_path = dist_dir if os.path.exists(dist_dir) else "bhadresh-savani/distilbert-base-uncased-emotion"
                         d_tok = AutoTokenizer.from_pretrained(d_path)
                         d_mod = AutoModelForSequenceClassification.from_pretrained(d_path).eval()
 
